@@ -225,7 +225,59 @@ if (editForm) {
     }
   });
 }
+// ฟังก์ชันแปลงไฟล์รูปภาพเป็น Base64 String
+function convertFileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = error => reject(error);
+  });
+}
 
+const addForm = document.getElementById("add-product-form");
+if (addForm) {
+  addForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const name = document.getElementById("product-name").value;
+    const producer = document.getElementById("product-producer").value;
+    const price = Number(document.getElementById("product-price").value);
+    const category = document.getElementById("product-category").value;
+    const contact = document.getElementById("product-contact").value;
+    const fileInput = document.getElementById("product-image");
+
+    let imagePath = "";
+
+    try {
+      // อ่านไฟล์รูปแล้วแปลงเป็น Base64
+      if (fileInput && fileInput.files && fileInput.files[0]) {
+        const file = fileInput.files[0];
+        
+        // เช็กขนาดไฟล์ ไม่ให้เกิน 2MB
+        if (file.size > 2 * 1024 * 1024) {
+          alert("⚠️ กรุณาเลือกรูปภาพที่มีขนาดไม่เกิน 2 MB");
+          return;
+        }
+
+        imagePath = await convertFileToBase64(file);
+      }
+
+      // บันทึกข้อความ Base64 ลงใน SQLite
+      const database = await initDatabase();
+      database.run(
+        `INSERT INTO products (name, producer, price, category, contact, image_path) VALUES (?, ?, ?, ?, ?, ?)`,
+        [name, producer, price, category, contact, imagePath]
+      );
+
+      addForm.reset();
+      await loadProducts();
+      alert("✅ เพิ่มผลิตภัณฑ์สำเร็จ!");
+    } catch (error) {
+      alert("❌ เกิดข้อผิดพลาด: " + error.message);
+    }
+  });
+}
 document.addEventListener("DOMContentLoaded", () => {
   loadProducts();
 });
