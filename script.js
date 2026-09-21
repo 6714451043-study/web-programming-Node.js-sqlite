@@ -59,7 +59,9 @@ async function loadProducts() {
       card.innerHTML = `
         ${product.image_path ? `
           <div class="card-image">
-            <img src="${product.image_path}" alt="${product.name}">
+            <img src="${product.image_path}" 
+             alt="${product.name}" 
+             onerror="this.onerror=null; this.src='https://via.placeholder.com/300x200?text=No+Image';">
           </div>
         ` : `
           <div class="card-image no-image">
