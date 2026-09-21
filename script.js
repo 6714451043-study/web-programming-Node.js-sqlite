@@ -1,18 +1,58 @@
 // ============================================
-// script.js — OTOP Frontend (Event Delegation Version)
+// script.js — GitHub Pages (sql.js + Base64 Image Support)
 // ============================================
 
+let db = null;
+
+// ----------------------------------------------------
+// โหลด sql.js และไฟล์ database.sqlite
+// ----------------------------------------------------
+async function initDatabase() {
+  if (db) return db;
+
+  const config = {
+    locateFile: filename => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${filename}`
+  };
+
+  const SQL = await initSqlJs(config);
+  
+  // โหลดไฟล์ database.sqlite จาก Repository
+  const response = await fetch("./database.sqlite");
+  if (!response.ok) throw new Error("ไม่พบไฟล์ database.sqlite บน Server");
+  
+  const buf = await response.arrayBuffer();
+  db = new SQL.Database(new Uint8Array(buf));
+  return db;
+}
+
+// ฟังก์ชันแปลงไฟล์รูปภาพเป็น Base64
+function convertFileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = error => reject(error);
+  });
+}
+
+// ----------------------------------------------------
+// ดึงรายการสินค้ามาแสดงผล
+// ----------------------------------------------------
 async function loadProducts() {
   const container = document.getElementById("products-container");
   if (!container) return;
 
-  container.innerHTML = "<p style='text-align:center; width: 100%;'>กำลังโหลด...</p>";
+  container.innerHTML = "<p style='text-align:center; width: 100%;'>กำลังโหลดข้อมูล...</p>";
 
   try {
-    const response = await fetch("/api/products");
-    if (!response.ok) throw new Error("ไม่สามารถดึงข้อมูลจาก Server ได้");
-    
-    const products = await response.json();
+    const database = await initDatabase();
+    const stmt = database.prepare("SELECT * FROM products ORDER BY id DESC");
+    const products = [];
+
+    while (stmt.step()) {
+      products.push(stmt.getAsObject());
+    }
+    stmt.free();
 
     if (products.length === 0) {
       container.innerHTML = "<p style='text-align:center; width: 100%;'>ยังไม่มีผลิตภัณฑ์</p>";
@@ -42,9 +82,9 @@ async function loadProducts() {
           <p class="producer">👥 ${product.producer}</p>
           ${product.contact ? `<p class="contact">📞 ${product.contact}</p>` : ""}
           <div class="card-footer">
-            <span class="price">฿ ${product.price.toLocaleString()}</span>
+            <span class="price">฿ ${Number(product.price).toLocaleString()}</span>
             <div class="card-actions">
-              <button class="edit-btn" data-id="${product.id}">✏️ แก้ไข</button>
+              <button class="edit-btn" data-id="${product.id}">✏️ ดูข้อมูล</button>
               <button class="delete-btn" data-id="${product.id}">🗑️ ลบ</button>
             </div>
           </div>
@@ -59,144 +99,47 @@ async function loadProducts() {
 }
 
 // ----------------------------------------------------
-// ดักจับ Event ด้วย Event Delegation (รองรับการคลิกทุกปุ่มชัวร์ 100%)
+// ฟอร์มเพิ่มสินค้า (บันทึกรูป Base64 ลง SQLite)
 // ----------------------------------------------------
-const productsContainer = document.getElementById("products-container");
-if (productsContainer) {
-  productsContainer.addEventListener("click", async (event) => {
-    // ปุ่มแก้ไข
-    if (event.target.classList.contains("edit-btn")) {
-      const id = Number(event.target.dataset.id);
-      try {
-        const response = await fetch(`/api/products/${id}`);
-        if (!response.ok) throw new Error("ดึงข้อมูลไม่สำเร็จ");
-        const product = await response.json();
-        openEditModal(product);
-      } catch (err) {
-        alert("❌ ไม่สามารถดึงข้อมูลสินค้าได้: " + err.message);
-      }
-    }
+document.addEventListener("DOMContentLoaded", () => {
+  loadProducts();
 
-    // ปุ่มลบ
-    if (event.target.classList.contains("delete-btn")) {
-      const id = Number(event.target.dataset.id);
-      const card = event.target.closest(".card");
-      const productName = card ? card.querySelector("h3").textContent : "รายการนี้";
+  const addForm = document.getElementById("add-product-form") || document.querySelector("form");
+  if (addForm) {
+    addForm.addEventListener("submit", async (event) => {
+      event.preventDefault(); // ป้องกันหน้าเว็บ Refresh
 
-      if (!confirm(`ยืนยันลบ "${productName}"?`)) return;
+      const name = document.getElementById("product-name")?.value || "";
+      const producer = document.getElementById("product-producer")?.value || "";
+      const price = Number(document.getElementById("product-price")?.value || 0);
+      const category = document.getElementById("product-category")?.value || "";
+      const contact = document.getElementById("product-contact")?.value || "";
+      const fileInput = document.getElementById("product-image") || document.querySelector('input[type="file"]');
+
+      let imagePath = "";
 
       try {
-        const response = await fetch(`/api/products/${id}`, { method: "DELETE" });
-        if (!response.ok) throw new Error("ลบไม่สำเร็จ");
+        if (fileInput && fileInput.files && fileInput.files[0]) {
+          const file = fileInput.files[0];
+          if (file.size > 2 * 1024 * 1024) {
+            alert("⚠️ กรุณาเลือกรูปภาพขนาดไม่เกิน 2 MB");
+            return;
+          }
+          imagePath = await convertFileToBase64(file);
+        }
+
+        const database = await initDatabase();
+        database.run(
+          `INSERT INTO products (name, producer, price, category, contact, image_path) VALUES (?, ?, ?, ?, ?, ?)`,
+          [name, producer, price, category, contact, imagePath]
+        );
+
+        addForm.reset();
         await loadProducts();
+        alert("✅ เพิ่มผลิตภัณฑ์และอัปโหลดรูปสำเร็จ!");
       } catch (error) {
         alert("❌ เกิดข้อผิดพลาด: " + error.message);
       }
-    }
-  });
-}
-
-// ----------------------------------------------------
-// ฟอร์มเพิ่มสินค้า
-// ----------------------------------------------------
-const addForm = document.getElementById("add-product-form");
-if (addForm) {
-  addForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-
-    const formData = new FormData();
-    formData.append("name", document.getElementById("product-name").value);
-    formData.append("producer", document.getElementById("product-producer").value);
-    formData.append("price", document.getElementById("product-price").value);
-    formData.append("category", document.getElementById("product-category").value);
-    formData.append("contact", document.getElementById("product-contact").value);
-
-    const fileInput = document.getElementById("product-image");
-    if (fileInput && fileInput.files && fileInput.files[0]) {
-      formData.append("image", fileInput.files[0]);
-    }
-
-    try {
-      const response = await fetch("/api/products", {
-        method: "POST",
-        body: formData
-      });
-
-      if (!response.ok) throw new Error("เพิ่มไม่สำเร็จ");
-
-      addForm.reset();
-      await loadProducts();
-      alert("✅ เพิ่มผลิตภัณฑ์สำเร็จ");
-    } catch (error) {
-      alert("❌ เกิดข้อผิดพลาด: " + error.message);
-    }
-  });
-}
-
-// ----------------------------------------------------
-// Modal และฟอร์มแก้ไข
-// ----------------------------------------------------
-const modal = document.getElementById("edit-modal");
-const closeBtn = document.getElementById("modal-close");
-const cancelBtn = document.getElementById("cancel-btn");
-const editForm = document.getElementById("edit-form");
-
-function openEditModal(product) {
-  document.getElementById("edit-id").value = product.id;
-  document.getElementById("edit-name").value = product.name;
-  document.getElementById("edit-producer").value = product.producer;
-  document.getElementById("edit-price").value = product.price;
-  document.getElementById("edit-category").value = product.category;
-  document.getElementById("edit-contact").value = product.contact || "";
-
-  if (modal) modal.classList.remove("hidden");
-}
-
-function closeEditModal() {
-  if (modal) modal.classList.add("hidden");
-  if (editForm) editForm.reset();
-}
-
-if (closeBtn) closeBtn.addEventListener("click", closeEditModal);
-if (cancelBtn) cancelBtn.addEventListener("click", closeEditModal);
-
-if (modal) {
-  modal.addEventListener("click", (event) => {
-    if (event.target === modal) closeEditModal();
-  });
-}
-
-if (editForm) {
-  editForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-
-    const id = Number(document.getElementById("edit-id").value);
-    const updatedData = {
-      name: document.getElementById("edit-name").value,
-      producer: document.getElementById("edit-producer").value,
-      price: Number(document.getElementById("edit-price").value),
-      category: document.getElementById("edit-category").value,
-      contact: document.getElementById("edit-contact").value || null
-    };
-
-    try {
-      const response = await fetch(`/api/products/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatedData)
-      });
-
-      if (!response.ok) throw new Error("แก้ไขไม่สำเร็จ");
-
-      closeEditModal();
-      await loadProducts();
-      alert("✅ บันทึกสำเร็จ");
-    } catch (error) {
-      alert("❌ " + error.message);
-    }
-  });
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-  loadProducts();
+    });
+  }
 });
