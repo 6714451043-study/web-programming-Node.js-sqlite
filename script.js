@@ -1,18 +1,50 @@
 // ============================================
-// script.js — OTOP Frontend (Event Delegation Version)
+// script.js — OTOP Frontend (sql.js / GitHub Pages Version)
 // ============================================
 
+let db = null; // ตัวแปรสำหรับเก็บการเชื่อมต่อ Database
+
+// ----------------------------------------------------
+// โหลด sql.js และไฟล์ database.sqlite
+// ----------------------------------------------------
+async function initDatabase() {
+  if (db) return db;
+
+  const config = {
+    locateFile: filename => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${filename}`
+  };
+
+  const SQL = await initSqlJs(config);
+  
+  // ดึงไฟล์ database.sqlite จาก Repository บน GitHub Pages
+  const response = await fetch("database.sqlite");
+  if (!response.ok) throw new Error("ไม่พบไฟล์ database.sqlite บน Server");
+  
+  const buf = await response.arrayBuffer();
+  db = new SQL.Database(new Uint8Array(buf));
+  return db;
+}
+
+// ----------------------------------------------------
+// ดึงรายการสินค้าทั้งหมดมาแสดงผล
+// ----------------------------------------------------
 async function loadProducts() {
   const container = document.getElementById("products-container");
   if (!container) return;
 
-  container.innerHTML = "<p style='text-align:center; width: 100%;'>กำลังโหลด...</p>";
+  container.innerHTML = "<p style='text-align:center; width: 100%;'>กำลังโหลดข้อมูลจาก SQLite...</p>";
 
   try {
-    const response = await fetch("/api/products");
-    if (!response.ok) throw new Error("ไม่สามารถดึงข้อมูลจาก Server ได้");
+    const database = await initDatabase();
     
-    const products = await response.json();
+    // คิวรีข้อมูลจากตาราง products (ตรงตามโครงสร้างเดิม)
+    const stmt = database.prepare("SELECT * FROM products ORDER BY id DESC");
+    const products = [];
+
+    while (stmt.step()) {
+      products.push(stmt.getAsObject());
+    }
+    stmt.free();
 
     if (products.length === 0) {
       container.innerHTML = "<p style='text-align:center; width: 100%;'>ยังไม่มีผลิตภัณฑ์</p>";
@@ -42,9 +74,9 @@ async function loadProducts() {
           <p class="producer">👥 ${product.producer}</p>
           ${product.contact ? `<p class="contact">📞 ${product.contact}</p>` : ""}
           <div class="card-footer">
-            <span class="price">฿ ${product.price.toLocaleString()}</span>
+            <span class="price">฿ ${Number(product.price).toLocaleString()}</span>
             <div class="card-actions">
-              <button class="edit-btn" data-id="${product.id}">✏️ แก้ไข</button>
+              <button class="edit-btn" data-id="${product.id}">✏️ ดูข้อมูล</button>
               <button class="delete-btn" data-id="${product.id}">🗑️ ลบ</button>
             </div>
           </div>
@@ -59,35 +91,41 @@ async function loadProducts() {
 }
 
 // ----------------------------------------------------
-// ดักจับ Event ด้วย Event Delegation (รองรับการคลิกทุกปุ่มชัวร์ 100%)
+// Event Delegation สำหรับปุ่ม ดูข้อมูล และ ลบ
 // ----------------------------------------------------
 const productsContainer = document.getElementById("products-container");
 if (productsContainer) {
   productsContainer.addEventListener("click", async (event) => {
-    // ปุ่มแก้ไข
+    // ปุ่มดูข้อมูล / แก้ไข
     if (event.target.classList.contains("edit-btn")) {
       const id = Number(event.target.dataset.id);
       try {
-        const response = await fetch(`/api/products/${id}`);
-        if (!response.ok) throw new Error("ดึงข้อมูลไม่สำเร็จ");
-        const product = await response.json();
-        openEditModal(product);
+        const database = await initDatabase();
+        const stmt = database.prepare("SELECT * FROM products WHERE id = :id");
+        const product = stmt.getAsObject({ ":id": id });
+        stmt.free();
+
+        if (product && product.id) {
+          openEditModal(product);
+        } else {
+          throw new Error("ไม่พบรายการนี้");
+        }
       } catch (err) {
         alert("❌ ไม่สามารถดึงข้อมูลสินค้าได้: " + err.message);
       }
     }
 
-    // ปุ่มลบ
+    // ปุ่มลบ (ลบชั่วคราวในความจำเบราว์เซอร์)
     if (event.target.classList.contains("delete-btn")) {
       const id = Number(event.target.dataset.id);
       const card = event.target.closest(".card");
       const productName = card ? card.querySelector("h3").textContent : "รายการนี้";
 
-      if (!confirm(`ยืนยันลบ "${productName}"?`)) return;
+      if (!confirm(`ยืนยันลบ "${productName}"? (ข้อควรระวัง: จะลบเฉพาะบนหน้าเบราว์เซอร์นี้เท่านั้น)`)) return;
 
       try {
-        const response = await fetch(`/api/products/${id}`, { method: "DELETE" });
-        if (!response.ok) throw new Error("ลบไม่สำเร็จ");
+        const database = await initDatabase();
+        database.run("DELETE FROM products WHERE id = ?", [id]);
         await loadProducts();
       } catch (error) {
         alert("❌ เกิดข้อผิดพลาด: " + error.message);
@@ -97,36 +135,29 @@ if (productsContainer) {
 }
 
 // ----------------------------------------------------
-// ฟอร์มเพิ่มสินค้า
+// ฟอร์มเพิ่มสินค้า (บันทึกชั่วคราวในเบราว์เซอร์)
 // ----------------------------------------------------
 const addForm = document.getElementById("add-product-form");
 if (addForm) {
   addForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
-    const formData = new FormData();
-    formData.append("name", document.getElementById("product-name").value);
-    formData.append("producer", document.getElementById("product-producer").value);
-    formData.append("price", document.getElementById("product-price").value);
-    formData.append("category", document.getElementById("product-category").value);
-    formData.append("contact", document.getElementById("product-contact").value);
-
-    const fileInput = document.getElementById("product-image");
-    if (fileInput && fileInput.files && fileInput.files[0]) {
-      formData.append("image", fileInput.files[0]);
-    }
+    const name = document.getElementById("product-name").value;
+    const producer = document.getElementById("product-producer").value;
+    const price = Number(document.getElementById("product-price").value);
+    const category = document.getElementById("product-category").value;
+    const contact = document.getElementById("product-contact").value;
 
     try {
-      const response = await fetch("/api/products", {
-        method: "POST",
-        body: formData
-      });
-
-      if (!response.ok) throw new Error("เพิ่มไม่สำเร็จ");
+      const database = await initDatabase();
+      database.run(
+        `INSERT INTO products (name, producer, price, category, contact) VALUES (?, ?, ?, ?, ?)`,
+        [name, producer, price, category, contact]
+      );
 
       addForm.reset();
       await loadProducts();
-      alert("✅ เพิ่มผลิตภัณฑ์สำเร็จ");
+      alert("✅ เพิ่มผลิตภัณฑ์สำเร็จ (ข้อมูลจะบันทึกชั่วคราวในหน้าเว็บนี้)");
     } catch (error) {
       alert("❌ เกิดข้อผิดพลาด: " + error.message);
     }
@@ -171,22 +202,18 @@ if (editForm) {
     event.preventDefault();
 
     const id = Number(document.getElementById("edit-id").value);
-    const updatedData = {
-      name: document.getElementById("edit-name").value,
-      producer: document.getElementById("edit-producer").value,
-      price: Number(document.getElementById("edit-price").value),
-      category: document.getElementById("edit-category").value,
-      contact: document.getElementById("edit-contact").value || null
-    };
+    const name = document.getElementById("edit-name").value;
+    const producer = document.getElementById("edit-producer").value;
+    const price = Number(document.getElementById("edit-price").value);
+    const category = document.getElementById("edit-category").value;
+    const contact = document.getElementById("edit-contact").value || null;
 
     try {
-      const response = await fetch(`/api/products/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatedData)
-      });
-
-      if (!response.ok) throw new Error("แก้ไขไม่สำเร็จ");
+      const database = await initDatabase();
+      database.run(
+        `UPDATE products SET name = ?, producer = ?, price = ?, category = ?, contact = ? WHERE id = ?`,
+        [name, producer, price, category, contact, id]
+      );
 
       closeEditModal();
       await loadProducts();
