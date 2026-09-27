@@ -116,7 +116,7 @@ if (addForm) {
 }
 
 // ==========================================
-// 5. ฟังก์ชันจัดการ Edit Modal (เปิด/ปิด/บันทึก)
+// 5. ฟังก์ชันจัดการ Edit Modal (เปิด/ปิด/บันทึก พร้อมแก้ไขรูปภาพ)
 // ==========================================
 function openEditModal(index) {
     const products = JSON.parse(localStorage.getItem('products')) || [];
@@ -129,6 +129,14 @@ function openEditModal(index) {
     document.getElementById('edit-category').value = item.category || 'อาหาร/อุปกรณ์สัตว์เลี้ยง';
     document.getElementById('edit-contact').value = item.contact || '';
 
+    // แสดงรูปปัจจุบันใน พรีวิว
+    const previewImg = document.getElementById('edit-preview-img');
+    if (previewImg) previewImg.src = item.image || '';
+
+    // ล้างค่าช่องเลือกรูปภาพใหม่
+    const editFileInput = document.getElementById('edit-image');
+    if (editFileInput) editFileInput.value = '';
+
     editModal.classList.remove('hidden');
 }
 
@@ -140,17 +148,41 @@ if (modalCloseBtn) modalCloseBtn.addEventListener('click', closeEditModal);
 if (cancelBtn) cancelBtn.addEventListener('click', closeEditModal);
 
 if (editForm) {
-    editForm.addEventListener('submit', (e) => {
+    editForm.addEventListener('submit', async (e) => {
         e.preventDefault();
 
         const index = document.getElementById('edit-id').value;
         let products = JSON.parse(localStorage.getItem('products')) || [];
 
+        const submitBtn = editForm.querySelector('button[type="submit"]');
+        const editFileInput = document.getElementById('edit-image');
+
+        // ค่ารูปภาพเริ่มต้นเป็นรูปเดิม
+        let imageUrl = products[index].image;
+
+        // เช็คว่าผู้ใช้เลือกรูปภาพใหม่หรือไม่
+        if (editFileInput && editFileInput.files[0]) {
+            if (submitBtn) submitBtn.disabled = true;
+            try {
+                alert('กำลังอัปโหลดรูปภาพใหม่ กรุณารอสักครู่...');
+                imageUrl = await uploadToCloudinary(editFileInput.files[0]);
+            } catch (err) {
+                console.error(err);
+                alert('อัปโหลดรูปภาพใหม่ไม่สำเร็จ');
+                if (submitBtn) submitBtn.disabled = false;
+                return;
+            } finally {
+                if (submitBtn) submitBtn.disabled = false;
+            }
+        }
+
+        // อัปเดตข้อมูลทั้งหมดลงใน Object
         products[index].name = document.getElementById('edit-name').value;
         products[index].producer = document.getElementById('edit-producer').value;
         products[index].price = document.getElementById('edit-price').value;
         products[index].category = document.getElementById('edit-category').value;
         products[index].contact = document.getElementById('edit-contact').value;
+        products[index].image = imageUrl; // บันทึกรูปใหม่ (หรือรูปเดิมถ้าไม่เลือกใหม่)
 
         localStorage.setItem('products', JSON.stringify(products));
         alert('อัปเดตข้อมูลผลิตภัณฑ์เรียบร้อย!');
