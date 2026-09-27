@@ -3,16 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>วิสาหกิจชุมชนในจันทบุรีเกี่ยวกับอาหารฝอุปกรณ์สัตว์เลี้ยง</title>
+  <title>วิสาหกิจชุมชนในจันทบุรีเกี่ยวกับอาหารและอุปกรณ์สัตว์เลี้ยง</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
   <!-- ============================================================
-       TODO 1 • NAVBAR
-       ------------------------------------------------------------
-       HTML ของ navbar เตรียมไว้ให้แล้ว — ไปเขียน CSS ที่ style.css
-       เป้าหมาย: Logo ชิดซ้าย, Menu 3 รายการชิดขวา, กึ่งกลางแนวตั้ง
+       NAVBAR
        ============================================================ -->
   <nav class="navbar">
     <div class="logo">วิสาหกิจชุมชนในจันทบุรีเกี่ยวกับอาหาร/อุปกรณ์สัตว์เลี้ยง</div>
@@ -23,11 +20,8 @@
     </ul>
   </nav>
 
-
   <!-- ============================================================
-       TODO 2 • HERO SECTION
-       ------------------------------------------------------------
-       เป้าหมาย: รูปฝั่งซ้าย + ข้อความฝั่งขวา เคียงข้างกัน
+       HERO SECTION
        ============================================================ -->
   <section class="hero" id="hero">
     <img src="assets/Store.jpg" alt="ภาพหลักของธุรกิจ" class="hero-img">
@@ -38,7 +32,9 @@
     </div>
   </section>
 
-  <!-- เพิ่มก่อน card grid -->
+  <!-- ============================================================
+       ADD PRODUCT FORM SECTION
+       ============================================================ -->
   <section class="add-form-section">
     <h2 class="section-title">➕ เพิ่มผลิตภัณฑ์ใหม่</h2>
     <form id="add-product-form" class="add-form" enctype="multipart/form-data">
@@ -49,7 +45,7 @@
           id="product-name"
           name="name"
           required
-          placeholder="เช่น น้ำพริกเผา">
+          placeholder="เช่น อาหารสุนัขโฮมเมด">
       </div>
 
       <div class="form-group">
@@ -103,7 +99,7 @@
           type="file"
           id="product-image"
           name="image"
-          placeholder="image/jpeg,image/png,image/webp">
+          accept="image/jpeg,image/png,image/webp">
       </div>
 
       <button type="submit" class="submit-btn">
@@ -111,24 +107,20 @@
       </button>
     </form>
   </section>
+
   <!-- ============================================================
-       TODO 3 • CARD GRID (สินค้า/บริการ)
-       ------------------------------------------------------------
-       เป้าหมาย: 4 cards เรียงในแถวบน desktop, ตัดบรรทัด (wrap) บนจอเล็ก
+       CARD GRID (สินค้า/บริการ)
        ============================================================ -->
   <section class="cards-section" id="products">
     <h2 class="section-title">สินค้าและบริการของเรา</h2>
 
     <div class="card-grid" id="products-container">
-
+      <!-- สินค้าจะแสดงตรงนี้จาก JavaScript -->
     </div>
   </section>
 
-
   <!-- ============================================================
-       TODO 4 • FOOTER
-       ------------------------------------------------------------
-       เป้าหมาย: 3 คอลัมน์ (ติดต่อ / โซเชียล / เกี่ยวกับเรา) กระจายเท่า ๆ กัน
+       FOOTER
        ============================================================ -->
   <footer class="footer" id="contact">
     <div class="footer-inner">
@@ -156,7 +148,10 @@
 
     <p class="copyright">© 2569 HAPPY PAWS — สงวนลิขสิทธิ์</p>
   </footer>
-  <!-- Edit Modal -->
+
+  <!-- ============================================================
+       EDIT MODAL (พร้อมช่องเปลี่ยนรูปภาพ)
+       ============================================================ -->
   <div id="edit-modal" class="modal-overlay hidden">
     <div class="modal">
       <div class="modal-header">
@@ -166,6 +161,16 @@
 
       <form id="edit-form" class="edit-form">
         <input type="hidden" id="edit-id">
+
+        <!-- 🖼️ ส่วนแสดงรูปปัจจุบัน + ปุ่มอัปโหลดรูปภาพใหม่ -->
+        <div class="form-group">
+          <label>รูปภาพปัจจุบัน</label>
+          <div style="margin-bottom: 8px;">
+            <img id="edit-preview-img" src="" alt="Preview" style="width: 100px; height: 100px; object-fit: cover; border-radius: 6px; border: 1px solid #ddd;">
+          </div>
+          <label for="edit-image">เปลี่ยนรูปภาพใหม่ (ถ้าไม่เปลี่ยนให้เว้นไว้)</label>
+          <input type="file" id="edit-image" accept="image/jpeg,image/png,image/webp">
+        </div>
 
         <div class="form-group">
           <label for="edit-name">ชื่อผลิตภัณฑ์ *</label>
@@ -191,7 +196,6 @@
               <option value="เครื่องประดับ/หัตถกรรม">💍 เครื่องประดับ/หัตถกรรม</option>
               <option value="สมุนไพร/สุขภาพ">🌿 สมุนไพร/สุขภาพ</option>
               <option value="ของใช้/ของตกแต่ง">🏺 ของใช้/ของตกแต่ง</option>
-              <!-- ➕ เพิ่ม Option นี้เข้าไป -->
               <option value="อาหาร/อุปกรณ์สัตว์เลี้ยง">🐕 อาหาร/อุปกรณ์สัตว์เลี้ยง</option>
             </select>
           </div>
@@ -209,12 +213,13 @@
       </form>
     </div>
   </div>
-  <!-- ใช้ CDN ตัวสำรองของ unpkg -->
-  <script src="https://unpkg.com/sql.js@1.8.0/dist/sql-wasm.js"></script>
-  <!-- สคริปต์หลักของคุณ -->
+
+  <!-- สคริปต์หลัก -->
   <script src="script.js"></script>
 </body>
 </html>
 
-<!--6714451018 นายมงคล เชียงชุม
-  6714451043 นายวริศ สุกใส-->
+<!--
+  6714451018 นายมงคล เชียงชุม
+  6714451043 นายวริศ สุกใส
+-->
