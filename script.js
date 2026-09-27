@@ -32,25 +32,48 @@ async function uploadToCloudinary(file) {
 function loadProducts() {
     const products = JSON.parse(localStorage.getItem('products')) || [];
     
-    // เลือก Element Container ที่ใช้แสดงสินค้า
-    const productGrid = document.querySelector('.product-list') || document.querySelector('#product-container') || document.body;
-    
-    // เคลียร์การ์ดสินค้าเดิม
-    const oldCards = productGrid.querySelectorAll('.product-card');
-    oldCards.forEach(card => card.remove());
+    // ค้นหา Container สำหรับแสดงสินค้าในหน้า HTML เดิม
+    // (ลองหาจาก .product-list, #product-container หรือพื้นที่ใต้หัวข้อสินค้าและบริการ)
+    let productGrid = document.querySelector('.product-grid') || 
+                      document.querySelector('.product-list') || 
+                      document.querySelector('#product-container');
 
+    // ถ้ายังหาไม่เจอ ให้สร้าง div container รองรับไว้ใต้หัวข้อ "สินค้าและบริการของเรา"
+    if (!productGrid) {
+        const headings = document.querySelectorAll('h1, h2, h3');
+        let targetHeading = null;
+        headings.forEach(h => {
+            if (h.textContent.includes('สินค้าและบริการ')) targetHeading = h;
+        });
+
+        if (targetHeading) {
+            productGrid = document.createElement('div');
+            productGrid.className = 'product-grid';
+            productGrid.style.cssText = 'display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; padding: 20px 0;';
+            targetHeading.insertAdjacentElement('afterend', productGrid);
+        } else {
+            productGrid = document.body;
+        }
+    }
+
+    // เคลียร์รายการเดิมออกก่อน
+    productGrid.innerHTML = '';
+
+    // วาดการ์ดสินค้าโดยใช้โครงสร้างคลาสตามดีไซน์เดิมของเว็บ
     products.forEach((item, index) => {
         const cardHtml = `
-            <div class="product-card" style="border: 1px solid #e0e0e0; padding: 15px; margin: 10px; border-radius: 8px; width: 280px; display: inline-block; vertical-align: top; background: #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
-                <img src="${item.image}" alt="${item.name}" style="width: 100%; height: 180px; object-fit: cover; border-radius: 6px;">
-                <h3 style="margin: 10px 0 5px; font-size: 18px;">${item.name}</h3>
-                <p style="margin: 3px 0; color: #666; font-size: 14px;">หมวดหมู่: ${item.category || '-'}</p>
-                <p style="margin: 3px 0; color: #666; font-size: 14px;">เบอร์ติดต่อ: ${item.phone || '-'}</p>
-                <p style="color: #d35400; font-weight: bold; font-size: 18px; margin: 8px 0;">฿ ${item.price}</p>
+            <div class="product-card" style="background: #fff; border-radius: 12px; padding: 15px; width: 320px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); display: inline-block; text-align: left; margin: 10px; vertical-align: top;">
+                <img src="${item.image}" alt="${item.name}" style="width: 100%; height: 200px; object-fit: cover; border-radius: 8px;">
+                <h3 style="margin: 12px 0 5px; color: #333; font-size: 18px;">${item.name}</h3>
+                <p style="margin: 4px 0; color: #777; font-size: 14px;">หมวดหมู่: ${item.category || '-'}</p>
+                <p style="margin: 4px 0; color: #777; font-size: 14px;">เบอร์ติดต่อ: ${item.phone || '-'}</p>
                 
-                <div style="display: flex; gap: 8px; margin-top: 10px;">
-                    <button onclick="editProduct(${index})" style="flex: 1; background: #f39c12; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer;">ดู/แก้ไข</button>
-                    <button onclick="deleteProduct(${index})" style="flex: 1; background: #e74c3c; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer;">ลบ</button>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
+                    <span style="color: #e67e22; font-weight: bold; font-size: 20px;">฿ ${item.price}</span>
+                    <div style="display: flex; gap: 6px;">
+                        <button onclick="editProduct(${index})" style="background: #f39c12; color: #fff; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 14px;">✏️ ดูข้อมูล/แก้ไข</button>
+                        <button onclick="deleteProduct(${index})" style="background: #e74c3c; color: #fff; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 14px;">🗑️ ลบ</button>
+                    </div>
                 </div>
             </div>
         `;
@@ -64,9 +87,9 @@ function loadProducts() {
 function deleteProduct(index) {
     if (confirm('คุณต้องการลบสินค้านี้ใช่หรือไม่?')) {
         let products = JSON.parse(localStorage.getItem('products')) || [];
-        products.splice(index, 1); // ลบรายการตามตำแหน่ง index
-        localStorage.setItem('products', JSON.stringify(products)); // อัปเดต localStorage
-        loadProducts(); // โหลดรายการสินค้าใหม่
+        products.splice(index, 1);
+        localStorage.setItem('products', JSON.stringify(products));
+        loadProducts();
     }
 }
 
@@ -77,9 +100,8 @@ function editProduct(index) {
     let products = JSON.parse(localStorage.getItem('products')) || [];
     const item = products[index];
 
-    // รับค่าใหม่จากผู้ใช้ผ่าน Prompt
     const newName = prompt('แก้ไขชื่อสินค้า:', item.name);
-    if (newName === null) return; // กด Cancel
+    if (newName === null) return;
 
     const newPrice = prompt('แก้ไขราคา (บาท):', item.price);
     if (newPrice === null) return;
@@ -90,18 +112,15 @@ function editProduct(index) {
     const newCategory = prompt('แก้ไขหมวดหมู่:', item.category || '');
     if (newCategory === null) return;
 
-    // อัปเดตข้อมูล
     products[index].name = newName || item.name;
     products[index].price = newPrice || item.price;
     products[index].phone = newPhone || item.phone;
     products[index].category = newCategory || item.category;
 
-    // บันทึกลง localStorage และรีโหลดรายการ
     localStorage.setItem('products', JSON.stringify(products));
-    alert('แก้ไขข้อมูลเรียบร้อยแล้ว!');
+    alert('อัปเดตข้อมูลเรียบร้อยแล้ว!');
     loadProducts();
 }
-
 // ==========================================
 // 6. Event Listener เมื่อกดปุ่ม "เพิ่มผลิตภัณฑ์"
 // ==========================================
