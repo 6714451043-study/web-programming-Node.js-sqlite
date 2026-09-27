@@ -1,145 +1,122 @@
-// ============================================
-// script.js — GitHub Pages (sql.js + Base64 Image Support)
-// ============================================
+// ==========================================
+// 1. ตั้งค่า Cloudinary (ใส่ข้อมูลของคุณตรงนี้)
+// ==========================================
+const CLOUD_NAME = 'emogxgbt'; 
+const UPLOAD_PRESET = 't94hnrgi';
 
-let db = null;
+// Elements
+const productForm = document.querySelector('form'); // หรือ id ของ form เช่น document.getElementById('product-form')
+const fileInput = document.querySelector('input[type="file"]');
+const container = document.querySelector('.product-list') || document.body; // ปรับ selector ให้ตรงกับ container แสดงสินค้าใน HTML
 
-// ----------------------------------------------------
-// โหลด sql.js และไฟล์ database.sqlite
-// ----------------------------------------------------
-async function initDatabase() {
-  if (db) return db;
+// ==========================================
+// 2. ฟังก์ชันอัปโหลดรูปภาพไป Cloudinary
+// ==========================================
+async function uploadToCloudinary(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', UPLOAD_PRESET);
 
-  const config = {
-    locateFile: filename => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${filename}`
-  };
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
+        method: 'POST',
+        body: formData
+    });
 
-  const SQL = await initSqlJs(config);
-  
-  // โหลดไฟล์ database.sqlite จาก Repository
-  const response = await fetch("./database.sqlite");
-  if (!response.ok) throw new Error("ไม่พบไฟล์ database.sqlite บน Server");
-  
-  const buf = await response.arrayBuffer();
-  db = new SQL.Database(new Uint8Array(buf));
-  return db;
+    if (!res.ok) throw new Error('Upload image failed');
+    const data = await res.json();
+    return data.secure_url; // ส่งคืน URL ของรูปภาพ
 }
 
-// ฟังก์ชันแปลงไฟล์รูปภาพเป็น Base64
-function convertFileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = error => reject(error);
-  });
-}
+// ==========================================
+// 3. ฟังก์ชันดึงข้อมูลจาก localStorage มาแสดงผล
+// ==========================================
+function loadProducts() {
+    const products = JSON.parse(localStorage.getItem('products')) || [];
+    
+    // ค้นหาตำแหน่งที่จะแสดงสินค้าในหน้า HTML (ปรับให้ตรงกับโครงสร้าง HTML ของคุณ)
+    const productGrid = document.querySelector('#product-container') || container;
+    
+    // เคลียร์การแสดงผลเดิม
+    // (หากมีส่วนแผงควบคุม ให้คงไว้ แล้วเคลียร์เฉพาะการ์ดสินค้า)
+    const cards = productGrid.querySelectorAll('.product-card');
+    cards.forEach(card => card.remove());
 
-// ----------------------------------------------------
-// ดึงรายการสินค้ามาแสดงผล
-// ----------------------------------------------------
-async function loadProducts() {
-  const container = document.getElementById("products-container");
-  if (!container) return;
-
-  container.innerHTML = "<p style='text-align:center; width: 100%;'>กำลังโหลดข้อมูล...</p>";
-
-  try {
-    const database = await initDatabase();
-    const stmt = database.prepare("SELECT * FROM products ORDER BY id DESC");
-    const products = [];
-
-    while (stmt.step()) {
-      products.push(stmt.getAsObject());
-    }
-    stmt.free();
-
-    if (products.length === 0) {
-      container.innerHTML = "<p style='text-align:center; width: 100%;'>ยังไม่มีผลิตภัณฑ์</p>";
-      return;
-    }
-
-    container.innerHTML = "";
-
-    products.forEach(product => {
-      const card = document.createElement("article");
-      card.className = "card";
-      card.innerHTML = `
-        ${product.image_path ? `
-          <div class="card-image">
-            <img src="${product.image_path}" alt="${product.name}">
-          </div>
-        ` : `
-          <div class="card-image no-image">
-            <span>📸 ไม่มีรูปภาพ</span>
-          </div>
-        `}
-        <div class="card-content">
-          <div class="card-header">
-            <h3>${product.name}</h3>
-            <span class="category-badge">${product.category}</span>
-          </div>
-          <p class="producer">👥 ${product.producer}</p>
-          ${product.contact ? `<p class="contact">📞 ${product.contact}</p>` : ""}
-          <div class="card-footer">
-            <span class="price">฿ ${Number(product.price).toLocaleString()}</span>
-            <div class="card-actions">
-              <button class="edit-btn" data-id="${product.id}">✏️ ดูข้อมูล</button>
-              <button class="delete-btn" data-id="${product.id}">🗑️ ลบ</button>
+    // สร้างการ์ดสินค้าแสดงผล
+    products.forEach((item, index) => {
+        const cardHtml = `
+            <div class="product-card" style="border: 1px solid #ddd; padding: 15px; margin: 10px; border-radius: 8px; max-width: 300px;">
+                <img src="${item.image}" alt="${item.name}" style="width: 100%; height: 200px; object-fit: cover; border-radius: 5px;">
+                <h3>${item.name}</h3>
+                <p>หมวดหมู่: ${item.category || '-'}</p>
+                <p>เบอร์ติดต่อ: ${item.phone || '-'}</p>
+                <p style="color: #e67e22; font-weight: bold;">฿ ${item.price}</p>
+                <button onclick="deleteProduct(${index})" style="background: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">ลบ</button>
             </div>
-          </div>
-        </div>
-      `;
-      container.appendChild(card);
+        `;
+        productGrid.insertAdjacentHTML('beforeend', cardHtml);
     });
-
-  } catch (error) {
-    container.innerHTML = `<p style="color:red; text-align:center; width: 100%;">Error: ${error.message}</p>`;
-  }
 }
 
-// ----------------------------------------------------
-// ฟอร์มเพิ่มสินค้า (บันทึกรูป Base64 ลง SQLite)
-// ----------------------------------------------------
-document.addEventListener("DOMContentLoaded", () => {
-  loadProducts();
+// ==========================================
+// 4. ฟังก์ชันลบสินค้า
+// ==========================================
+function deleteProduct(index) {
+    let products = JSON.parse(localStorage.getItem('products')) || [];
+    products.splice(index, 1);
+    localStorage.setItem('products', JSON.stringify(products));
+    loadProducts();
+}
 
-  const addForm = document.getElementById("add-product-form") || document.querySelector("form");
-  if (addForm) {
-    addForm.addEventListener("submit", async (event) => {
-      event.preventDefault(); // ป้องกันหน้าเว็บ Refresh
+// ==========================================
+// 5. Event Listener เมื่อกดปุ่ม "เพิ่มผลิตภัณฑ์"
+// ==========================================
+if (productForm) {
+    productForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
 
-      const name = document.getElementById("product-name")?.value || "";
-      const producer = document.getElementById("product-producer")?.value || "";
-      const price = Number(document.getElementById("product-price")?.value || 0);
-      const category = document.getElementById("product-category")?.value || "";
-      const contact = document.getElementById("product-contact")?.value || "";
-      const fileInput = document.getElementById("product-image") || document.querySelector('input[type="file"]');
+        const submitBtn = productForm.querySelector('button[type="submit"]');
+        if (submitBtn) submitBtn.disabled = true;
 
-      let imagePath = "";
+        try {
+            const file = fileInput.files[0];
+            let imageUrl = '';
 
-      try {
-        if (fileInput && fileInput.files && fileInput.files[0]) {
-          const file = fileInput.files[0];
-          if (file.size > 2 * 1024 * 1024) {
-            alert("⚠️ กรุณาเลือกรูปภาพขนาดไม่เกิน 2 MB");
-            return;
-          }
-          imagePath = await convertFileToBase64(file);
+            if (file) {
+                alert('กำลังอัปโหลดรูปภาพ กรุณารอสักครู่...');
+                imageUrl = await uploadToCloudinary(file);
+            } else {
+                alert('กรุณาเลือกรูปภาพ');
+                if (submitBtn) submitBtn.disabled = false;
+                return;
+            }
+
+            // ดึงค่าจาก Form (ปรับ selector ตาม name/id ใน HTML ของคุณ)
+            const newProduct = {
+                id: Date.now(),
+                name: productForm.querySelector('input[placeholder*="ชื่อ"]')?.value || 'สินค้าใหม่',
+                price: productForm.querySelector('input[type="number"]')?.value || '0',
+                phone: productForm.querySelector('input[type="tel"]')?.value || '',
+                category: productForm.querySelector('select')?.value || '',
+                image: imageUrl
+            };
+
+            // บันทึกลง localStorage
+            const products = JSON.parse(localStorage.getItem('products')) || [];
+            products.push(newProduct);
+            localStorage.setItem('products', JSON.stringify(products));
+
+            alert('เพิ่มสินค้าเรียบร้อยแล้ว!');
+            productForm.reset();
+            loadProducts();
+
+        } catch (err) {
+            console.error(err);
+            alert('เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ');
+        } finally {
+            if (submitBtn) submitBtn.disabled = false;
         }
-
-        const database = await initDatabase();
-        database.run(
-          `INSERT INTO products (name, producer, price, category, contact, image_path) VALUES (?, ?, ?, ?, ?, ?)`,
-          [name, producer, price, category, contact, imagePath]
-        );
-
-        addForm.reset();
-        await loadProducts();
-        alert("✅ เพิ่มผลิตภัณฑ์และอัปโหลดรูปสำเร็จ!");
-      } catch (error) {
-        alert("❌ เกิดข้อผิดพลาด: " + error.message);
-      }
     });
-  }
-});
+}
+
+// โหลดรายการสินค้าทันทีเมื่อเปิดหน้าเว็บ
+document.addEventListener('DOMContentLoaded', loadProducts);
